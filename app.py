@@ -3,139 +3,101 @@ import streamlit as st
 import base64
 from openai import OpenAI
 import openai
-#from PIL import Image
-import tensorflow as tf
 from PIL import Image, ImageOps
 import numpy as np
-import pandas as pd
-import matplotlib.pyplot as plt
-import streamlit as st
 from streamlit_drawable_canvas import st_canvas
 
-Expert=" "
-profile_imgenh=" "
-    
+# Función para codificar imagen en base64
 def encode_image_to_base64(image_path):
     try:
         with open(image_path, "rb") as image_file:
             encoded_image = base64.b64encode(image_file.read()).decode("utf-8")
             return encoded_image
     except FileNotFoundError:
-        return "Error: La imagen no se encontró en la ruta especificada."
+        return "⚠️ Error: La imagen no se encontró en la ruta especificada."
 
+# Configuración de la página
+st.set_page_config(page_title='🛡️ Tablero del Caballero Ilustrado', layout="centered")
 
-# Streamlit 
-st.set_page_config(page_title='Tablero Inteligente')
-st.title('Tablero Inteligente')
+# Título y descripción medieval
+st.markdown("""
+    <h1 style='text-align: center; color: #4B3621;'>🛡️ Tablero del Caballero Ilustrado</h1>
+    <p style='text-align: center; font-size: 18px;'>Dibuja tus símbolos, runas o esquemas de batalla, y el Oráculo de la Torre los interpretará con sabiduría ancestral.</p>
+    """, unsafe_allow_html=True)
+
+# Panel lateral temático
 with st.sidebar:
-    st.subheader("Acerca de:")
-    st.subheader("En esta aplicación veremos la capacidad que ahora tiene una máquina de interpretar un boceto")
-st.subheader("Dibuja el boceto en el panel  y presiona el botón para analizarla")
+    st.markdown("## 📜 Acerca del Oráculo")
+    st.markdown("Este artefacto mágico interpreta tus símbolos y bocetos. Dibuja sobre el pergamino encantado y descubre su sabiduría.")
 
-# Add canvas component
-#bg_image = st.sidebar.file_uploader("Cargar Imagen:", type=["png", "jpg"])
-# Specify canvas parameters in application
+# Estética del canvas
 drawing_mode = "freedraw"
-stroke_width = st.sidebar.slider('Selecciona el ancho de línea', 1, 30, 5)
-#stroke_color = '#FFFFFF' # Set background color to white
-#bg_color = '#000000'
-stroke_color = "#000000" 
-bg_color = '#FFFFFF'
-#realtime_update = st.sidebar.checkbox("Update in realtime", True)
+stroke_width = st.sidebar.slider('✒️ Grosor de la tinta', 1, 30, 5)
+stroke_color = "#2F1B0C"  # Marrón oscuro, como tinta antigua
+bg_color = '#F5F5DC'  # Color pergamino
 
-
-# Create a canvas component
+# Componente canvas
 canvas_result = st_canvas(
-    fill_color="rgba(255, 165, 0, 0.3)",  # Fixed fill color with some opacity
+    fill_color="rgba(255, 215, 0, 0.3)",  # dorado suave translúcido
     stroke_width=stroke_width,
     stroke_color=stroke_color,
     background_color=bg_color,
     height=300,
     width=400,
-    #background_image= None #Image.open(bg_image) if bg_image else None,
     drawing_mode=drawing_mode,
     key="canvas",
 )
 
-ke = st.text_input('Ingresa tu Clave')
-#os.environ['OPENAI_API_KEY'] = st.secrets['OPENAI_API_KEY']
+# Clave API
+ke = st.text_input('🔐 Ingresa tu Clave de Acceso al Grimorio (API Key)', type="password")
 os.environ['OPENAI_API_KEY'] = ke
+api_key = os.environ.get('OPENAI_API_KEY')
 
+# Cliente OpenAI
+client = OpenAI(api_key=api_key) if api_key else None
 
-# Retrieve the OpenAI API Key from secrets
-api_key = os.environ['OPENAI_API_KEY']
+# Botón de análisis
+analyze_button = st.button("🔍 Invocar Sabiduría del Oráculo", type="primary")
 
-# Initialize the OpenAI client with the API key
-client = OpenAI(api_key=api_key)
-
-analyze_button = st.button("Analiza la imagen", type="secondary")
-
-# Check if an image has been uploaded, if the API key is available, and if the button has been pressed
+# Procesamiento si se cumple todo
 if canvas_result.image_data is not None and api_key and analyze_button:
+    with st.spinner("🧙‍♂️ El Oráculo está interpretando tu símbolo..."):
 
-    with st.spinner("Analizando ..."):
-        # Encode the image
+        # Procesar imagen
         input_numpy_array = np.array(canvas_result.image_data)
-        input_image = Image.fromarray(input_numpy_array.astype('uint8'),'RGBA')
+        input_image = Image.fromarray(input_numpy_array.astype('uint8'), 'RGBA')
         input_image.save('img.png')
-        
-      # Codificar la imagen en base64
- 
+
         base64_image = encode_image_to_base64("img.png")
-            
-        prompt_text = (f"Describe in spanish briefly the image")
-    
-      # Create the payload for the completion request
-        messages = [
-            {
-                "role": "user",
-                "content": [
-                    {"type": "text", "text": prompt_text},
-                    {
-                        "type": "image_url",
-                        "image_url":f"data:image/png;base64,{base64_image}",
-                    },
-                ],
-            }
-        ]
-    
-        # Make the request to the OpenAI API
+        prompt_text = "Describe en español lo que observas en la imagen. Sé claro, como un sabio consejero de la corte."
+
+        # Construir mensaje
+        messages = [{
+            "role": "user",
+            "content": [
+                {"type": "text", "text": prompt_text},
+                {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{base64_image}"}},
+            ],
+        }]
+
+        # Petición al modelo
         try:
             full_response = ""
             message_placeholder = st.empty()
             response = openai.chat.completions.create(
-              model= "gpt-4o-mini",  #o1-preview ,gpt-4o-mini
-              messages=[
-                {
-                   "role": "user",
-                   "content": [
-                     {"type": "text", "text": prompt_text},
-                     {
-                       "type": "image_url",
-                       "image_url": {
-                         "url": f"data:image/png;base64,{base64_image}",
-                       },
-                     },
-                   ],
-                  }
-                ],
-              max_tokens=500,
-              )
-            #response.choices[0].message.content
-            if response.choices[0].message.content is not None:
-                    full_response += response.choices[0].message.content
-                    message_placeholder.markdown(full_response + "▌")
-            # Final update to placeholder after the stream ends
-            message_placeholder.markdown(full_response)
-            if Expert== profile_imgenh:
-               st.session_state.mi_respuesta= response.choices[0].message.content #full_response 
-    
-            # Display the response in the app
-            #st.write(response.choices[0])
-        except Exception as e:
-            st.error(f"An error occurred: {e}")
-else:
-    # Warnings for user action required
+                model="gpt-4o",
+                messages=messages,
+                max_tokens=500,
+            )
 
+            content = response.choices[0].message.content
+            if content:
+                message_placeholder.markdown(f"### 📖 Respuesta del Oráculo:\n\n{content}")
+        except Exception as e:
+            st.error(f"⚠️ Ha ocurrido un error al invocar al Oráculo: {e}")
+else:
     if not api_key:
-        st.warning("Por favor ingresa tu API key.")
+        st.warning("🛑 Por favor, ingresa tu clave mágica (API key) para continuar.")
+    elif analyze_button and canvas_result.image_data is None:
+        st.warning("🛑 Por favor, dibuja tu símbolo en el pergamino antes de invocar al Oráculo.")
+
